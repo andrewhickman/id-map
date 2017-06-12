@@ -1,12 +1,15 @@
 //! A container that gives each item a unique id. Adding and removing by index is O(1).
 
+extern crate bit_set;
+extern crate bit_vec;
+
 #[cfg(test)] mod tests;
 
 use std::iter::FromIterator;
 use std::ops::{Index, IndexMut};
 use std::{fmt, ptr};
 
-use bit_set::{self, BitSet};
+use bit_set::BitSet;
 use bit_vec::BitVec;
 
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
