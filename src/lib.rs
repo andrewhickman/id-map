@@ -1,9 +1,12 @@
 //! A container that gives each item a unique id. Adding and removing by index is O(1).
 
+#![deny(missing_docs)]
+
 extern crate bit_set;
 extern crate bit_vec;
 
-#[cfg(test)] mod tests;
+#[cfg(test)]
+mod tests;
 
 use std::iter::FromIterator;
 use std::ops::{Index, IndexMut};
@@ -22,97 +25,109 @@ pub struct IdMap<T> {
     ids: BitSet,
     // The buffer of values. Indices not in ids are invalid.
     values: Vec<T>,
-    // The index to start counting from when inserting.
-    start: usize,
+    // The smallest empty space in the vector of values, or values.len() if no space is left.
+    space: usize,
 }
 
 impl<T> IdMap<T> {
-    /// Create an empty map.
+    /// Creates an empty `IdMap<T>`.
     pub fn new() -> Self {
         IdMap {
             ids: BitSet::new(),
             values: Vec::new(),
-            start: 0,
+            space: 0,
         }
     }
 
-    /// Insert an value into the map and return its id.    
+    /// Creates an `IdMap<T>` with the specified capacity.
+    pub fn with_capacity(cap: usize) -> Self {
+        IdMap {
+            ids: BitSet::with_capacity(cap),
+            values: Vec::with_capacity(cap),
+            space: 0,
+        }
+    }
+
+    /// Inserts a value into the map and returns its id.
     pub fn insert(&mut self, val: T) -> Id {
-        let end = self.values.len();
-        for id in self.start..end {
-            if self.ids.insert(id) {
-                // The value in the vec is uninitialized.
-                unsafe {
-                    ptr::write(self.values.get_unchecked_mut(id), val);
-                }
-                self.start = id;
-                return Id(id);
+        if self.space == self.values.len() {
+            self.values.push(val)
+        } else {
+            unsafe {
+                ptr::write(self.values.get_unchecked_mut(self.space), val)
             }
         }
-        self.ids.insert(end);
-        self.values.push(val);
-        self.start = end;
-        Id(end)
+        let id = self.space;
+        self.ids.insert(id);
+
+        // Find the next empty space.
+        self.space += 1;
+        while self.ids.contains(self.space) {
+            self.space += 1;
+        }
+
+        Id(id)
     }
 
-    /// Remove the value at the given index, returning it if it exists. 
+    /// Removes an id from the map, returning its value if it was previously in the map.
     pub fn remove(&mut self, Id(id): Id) -> Option<T> {
         if self.ids.remove(id) {
-            if id < self.start {
-                self.start = id;
+            if id < self.space {
+                self.space = id;
             }
-            Some(if id + 1 == self.values.len() {
-                // Note len() cannot be 0 here so unwrap cannot fail.
-                self.values.pop().unwrap()
+            if id + 1 == self.values.len() {
+                self.values.pop()
             } else {
-                unsafe { ptr::read(self.values.get_unchecked(id)) }
-            })
+                Some(unsafe { ptr::read(self.values.get_unchecked(id)) })
+            }
         } else {
             None
         }
     }
 
-    /// Get an iterator over ids.
+    /// An iterator over all ids in increasing order.
     pub fn ids(&self) -> Ids {
-        Ids { ids: self.ids.iter(), start: self.start }
+        Ids {
+            ids: self.ids.iter(),
+            min: self.space,
+        }
     }
 
-    /// Get an iterator over values.
+    /// An iterator over all values.
     pub fn values(&self) -> Values<T> {
         Values {
             ids: self.ids.iter(),
             values: &self.values,
-            start: self.start,
+            min: self.space,
         }
     }
 
-    /// Get an iterator over id, value pairs.
+    /// An iterator over id-value pairs in order of increasing ids.
     pub fn iter(&self) -> Iter<T> {
         Iter {
             ids: self.ids.iter(),
             values: &self.values,
-            start: self.start,
+            min: self.space,
         }
     }
 
-    /// Check whether a given id has an entry in the map.
+    /// Returns true if the map contains a value for the specified id.
     pub fn contains(&self, Id(id): Id) -> bool {
         self.ids.contains(id)
     }
 
     #[cfg(test)]
     fn assert_invariant(&self) {
-        // All elements less than start should be filled.
-        for id in 0..self.start {
+        // space should be the minimal empty space.
+        for id in 0..self.space {
             assert!(self.ids.contains(id));
         }
-        // All elements should be less than end.
-        let end = self.values.len();
+        assert!(!self.ids.contains(self.space));
+        // values.len() should be the least upper bounds on ids.
         for id in &self.ids {
-            assert!(id < end)
+            assert!(id < self.values.len())
         }
-        // End should be minimal.
-        assert!(end == 0 || self.ids.contains(end - 1));
+        assert!(self.values.len() == 0 || self.ids.contains(self.values.len() - 1));
     }
 }
 
@@ -148,6 +163,12 @@ impl<T: fmt::Debug> fmt::Debug for IdMap<T> {
     }
 }
 
+impl<T> Default for IdMap<T> {
+    fn default() -> Self {
+        IdMap::new()
+    }
+}
+
 impl<T: Eq> Eq for IdMap<T> {}
 
 impl<T: PartialEq> PartialEq for IdMap<T> {
@@ -174,9 +195,13 @@ impl<T> Extend<T> for IdMap<T> {
 impl<T> FromIterator<T> for IdMap<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let values = Vec::from_iter(iter);
-        let start = values.len();
-        let ids = BitSet::from_bit_vec(BitVec::from_elem(start, true));
-        IdMap { values, start, ids }
+        let space = values.len();
+        let ids = BitSet::from_bit_vec(BitVec::from_elem(values.len(), true));
+        IdMap {
+            values,
+            space,
+            ids,
+        }
     }
 }
 
@@ -206,10 +231,10 @@ impl<T> IndexMut<Id> for IdMap<T> {
 }
 
 #[derive(Clone)]
-/// Iterator over ids.
+/// An iterator over all ids in increasing order.
 pub struct Ids<'a> {
     ids: bit_set::Iter<'a, u32>,
-    start: usize,
+    min: usize,
 }
 
 impl<'a> Iterator for Ids<'a> {
@@ -220,15 +245,15 @@ impl<'a> Iterator for Ids<'a> {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.start, self.ids.size_hint().1)
+        (self.min, self.ids.size_hint().1)
     }
 }
 
-/// Iterator over values.
+/// An iterator over all values.
 pub struct Values<'a, T: 'a> {
     ids: bit_set::Iter<'a, u32>,
     values: &'a [T],
-    start: usize,
+    min: usize,
 }
 
 impl<'a, T: 'a> Iterator for Values<'a, T> {
@@ -239,7 +264,7 @@ impl<'a, T: 'a> Iterator for Values<'a, T> {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.start, self.ids.size_hint().1)
+        (self.min, self.ids.size_hint().1)
     }
 }
 
@@ -248,16 +273,16 @@ impl<'a, T: 'a> Clone for Values<'a, T> {
         Values {
             ids: self.ids.clone(),
             values: self.values,
-            start: self.start,
+            min: self.min,
         }
     }
 }
 
-/// Iterator over id, value pairs.
+/// An iterator over id-value pairs in order of increasing ids.
 pub struct Iter<'a, T: 'a> {
     ids: bit_set::Iter<'a, u32>,
     values: &'a [T],
-    start: usize,
+    min: usize,
 }
 
 impl<'a, T: 'a> Iterator for Iter<'a, T> {
@@ -268,7 +293,7 @@ impl<'a, T: 'a> Iterator for Iter<'a, T> {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.start, self.ids.size_hint().1)
+        (self.min, self.ids.size_hint().1)
     }
 }
 
@@ -277,7 +302,7 @@ impl<'a, T: 'a> Clone for Iter<'a, T> {
         Iter {
             ids: self.ids.clone(),
             values: self.values,
-            start: self.start,
+            min: self.min,
         }
     }
 }
