@@ -53,9 +53,7 @@ impl<T> IdMap<T> {
         if self.space == self.values.len() {
             self.values.push(val)
         } else {
-            unsafe {
-                ptr::write(self.values.get_unchecked_mut(self.space), val)
-            }
+            unsafe { ptr::write(self.values.get_unchecked_mut(self.space), val) }
         }
         let id = self.space;
         self.ids.insert(id);
@@ -102,11 +100,29 @@ impl<T> IdMap<T> {
         }
     }
 
+    /// A mutable iterator over all values.
+    pub fn values_mut(&mut self) -> ValuesMut<T> {
+        ValuesMut {
+            ids: self.ids.iter(),
+            values: &mut self.values,
+            min: self.space,
+        }
+    }
+
     /// An iterator over id-value pairs in order of increasing ids.
     pub fn iter(&self) -> Iter<T> {
         Iter {
             ids: self.ids.iter(),
             values: &self.values,
+            min: self.space,
+        }
+    }
+
+    /// A mutable iterator over id-value pairs in order of increasing ids.
+    pub fn iter_mut(&mut self) -> IterMut<T> {
+        IterMut {
+            ids: self.ids.iter(),
+            values: &mut self.values,
             min: self.space,
         }
     }
@@ -278,6 +294,27 @@ impl<'a, T: 'a> Clone for Values<'a, T> {
     }
 }
 
+/// A mutable iterator over all values.
+pub struct ValuesMut<'a, T: 'a> {
+    ids: bit_set::Iter<'a, u32>,
+    values: &'a mut [T],
+    min: usize,
+}
+
+impl<'a, T: 'a> Iterator for ValuesMut<'a, T> {
+    type Item = &'a mut T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // Cast through a pointer to get rid of lifetime information. This is effectively asserting
+        // that each reference returned is distinct.
+        self.ids.next().map(|id| unsafe { &mut *(self.values.get_unchecked_mut(id) as *mut T) })
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.min, self.ids.size_hint().1)
+    }
+}
+
 /// An iterator over id-value pairs in order of increasing ids.
 pub struct Iter<'a, T: 'a> {
     ids: bit_set::Iter<'a, u32>,
@@ -304,5 +341,27 @@ impl<'a, T: 'a> Clone for Iter<'a, T> {
             values: self.values,
             min: self.min,
         }
+    }
+}
+
+/// A mutable iterator over id-value pairs in order of increasing ids.
+pub struct IterMut<'a, T: 'a> {
+    ids: bit_set::Iter<'a, u32>,
+    values: &'a mut [T],
+    min: usize,
+}
+
+impl<'a, T: 'a> Iterator for IterMut<'a, T> {
+    type Item = (Id, &'a mut T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.ids.next().map(|id| {
+                                (Id(id),
+                                 unsafe { &mut *(self.values.get_unchecked_mut(id) as *mut T) })
+                            })
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.min, self.ids.size_hint().1)
     }
 }

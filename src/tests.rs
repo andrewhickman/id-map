@@ -46,6 +46,18 @@ fn iter() {
 }
 
 #[test]
+fn iter_mut() {
+    let mut ids = IdMap::from_iter(0..5);
+
+    let mut refs: Vec<&mut u32> = ids.values_mut().collect();
+
+    refs.sort();
+    refs.dedup_by(|l, r| *l as *mut u32 == *r as *mut u32);
+
+    assert_eq!(refs.len(), 5)
+}
+
+#[test]
 #[should_panic(expected = "id 0 out of bounds")]
 fn panic() {
     let mut ids = IdMap::<u32>::new();
