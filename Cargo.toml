@@ -1,0 +1,8 @@
+[package]
+name = "id-map"
+version = "0.1.0"
+authors = ["andre <andrew.hickman1@sky.com>"]
+
+[dependencies]
+bit-set = "0.4.0"
+bit-vec = "0.4.0"
