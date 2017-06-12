@@ -1,6 +1,7 @@
 [package]
 name = "id-map"
 description = "Data structure of values indexed by IDs."
+repository = "https://github.com/andrewhickman/id-map"
 license = "MIT"
 version = "0.1.0"
 authors = ["Andrew Hickman <andrew.hickman1@sky.com>"]
