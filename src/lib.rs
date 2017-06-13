@@ -230,6 +230,15 @@ impl<'a, T> IntoIterator for &'a IdMap<T> {
     }
 }
 
+impl<'a, T> IntoIterator for &'a mut IdMap<T> {
+    type Item = (Id, &'a mut T);
+    type IntoIter = IterMut<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_mut()
+    }
+}
+
 impl<T> Index<Id> for IdMap<T> {
     type Output = T;
 
