@@ -48,6 +48,12 @@ impl<T> IdMap<T> {
         }
     }
 
+    /// Remove all values from the map.
+    pub fn clear(&mut self) {
+        unsafe { self.drop_values() }
+        self.ids.clear();
+    }
+
     /// Inserts a value into the map and returns its id.
     pub fn insert(&mut self, val: T) -> Id {
         if self.space == self.values.len() {
@@ -83,7 +89,7 @@ impl<T> IdMap<T> {
         }
     }
 
-    /// An iterator over all ids in increasing order.
+    /// An iterator over ids.
     pub fn ids(&self) -> Ids {
         Ids {
             ids: self.ids.iter(),
@@ -91,7 +97,7 @@ impl<T> IdMap<T> {
         }
     }
 
-    /// An iterator over all values.
+    /// An iterator over values.
     pub fn values(&self) -> Values<T> {
         Values {
             ids: self.ids.iter(),
@@ -100,7 +106,7 @@ impl<T> IdMap<T> {
         }
     }
 
-    /// A mutable iterator over all values.
+    /// A mutable iterator over values.
     pub fn values_mut(&mut self) -> ValuesMut<T> {
         ValuesMut {
             ids: self.ids.iter(),
@@ -109,7 +115,7 @@ impl<T> IdMap<T> {
         }
     }
 
-    /// An iterator over id-value pairs in order of increasing ids.
+    /// An iterator over id-value pairs.
     pub fn iter(&self) -> Iter<T> {
         Iter {
             ids: self.ids.iter(),
@@ -118,7 +124,7 @@ impl<T> IdMap<T> {
         }
     }
 
-    /// A mutable iterator over id-value pairs in order of increasing ids.
+    /// A mutable iterator over id-value pairs.
     pub fn iter_mut(&mut self) -> IterMut<T> {
         IterMut {
             ids: self.ids.iter(),
@@ -139,29 +145,59 @@ impl<T> IdMap<T> {
             assert!(self.ids.contains(id));
         }
         assert!(!self.ids.contains(self.space));
-        // values.len() should be the least upper bounds on ids.
+        // values.len() should be the least upper bound on ids.
         for id in &self.ids {
             assert!(id < self.values.len())
         }
         assert!(self.values.len() == 0 || self.ids.contains(self.values.len() - 1));
     }
+
+    /// Clear the values vec. Unsafe since ids is not updated.
+    unsafe fn drop_values(&mut self) {
+        for id in &self.ids {
+            ptr::drop_in_place(self.values.get_unchecked_mut(id))
+        }
+        self.values.set_len(0);
+    }
 }
 
 impl<T> Drop for IdMap<T> {
     fn drop(&mut self) {
-        // Our vec contains uninitialized values so we must manually drop it.
-        unsafe {
-            for id in &self.ids {
-                ptr::drop_in_place(self.values.get_unchecked_mut(id))
-            }
-            self.values.set_len(0);
-        }
+        unsafe { self.drop_values() }
     }
 }
 
 impl<T: Clone> Clone for IdMap<T> {
     fn clone(&self) -> Self {
-        self.values().cloned().collect()
+        let ids = self.ids.clone();
+        let len = self.values.len();
+        let mut values = Vec::with_capacity(len);
+        unsafe {
+            values.set_len(len);
+            for id in &ids {
+                ptr::write(values.get_unchecked_mut(id),
+                           self.values.get_unchecked(id).clone());
+            }
+        }
+        IdMap {
+            ids,
+            values,
+            space: len,
+        }
+    }
+
+    fn clone_from(&mut self, other: &Self) {
+        self.clear();
+        let len = other.values.len();
+        self.ids.clone_from(&other.ids);
+        self.values.reserve(len);
+        unsafe {
+            self.values.set_len(len);
+            for id in &self.ids {
+                ptr::write(self.values.get_unchecked_mut(id),
+                           other.values.get_unchecked(id).clone());
+            }
+        }
     }
 }
 
@@ -189,14 +225,11 @@ impl<T: Eq> Eq for IdMap<T> {}
 
 impl<T: PartialEq> PartialEq for IdMap<T> {
     fn eq(&self, other: &Self) -> bool {
-        let (mut lhs, mut rhs) = (self.values(), other.values());
-        loop {
-            match (lhs.next(), rhs.next()) {
-                (Some(left), Some(right)) if left == right => continue,
-                (None, None) => return true,
-                _ => return false,
-            }
-        }
+        self.ids == other.ids &&
+        self.ids
+            .iter()
+            .zip(other.ids.iter())
+            .all(|(l, r)| unsafe { self.values.get_unchecked(l) == other.values.get_unchecked(r) })
     }
 }
 
@@ -256,7 +289,7 @@ impl<T> IndexMut<Id> for IdMap<T> {
 }
 
 #[derive(Clone)]
-/// An iterator over all ids in increasing order.
+/// An iterator over all ids.
 pub struct Ids<'a> {
     ids: bit_set::Iter<'a, u32>,
     min: usize,
@@ -324,7 +357,7 @@ impl<'a, T: 'a> Iterator for ValuesMut<'a, T> {
     }
 }
 
-/// An iterator over id-value pairs in order of increasing ids.
+/// An iterator over id-value pairs.
 pub struct Iter<'a, T: 'a> {
     ids: bit_set::Iter<'a, u32>,
     values: &'a [T],
@@ -353,7 +386,7 @@ impl<'a, T: 'a> Clone for Iter<'a, T> {
     }
 }
 
-/// A mutable iterator over id-value pairs in order of increasing ids.
+/// A mutable iterator over id-value pairs.
 pub struct IterMut<'a, T: 'a> {
     ids: bit_set::Iter<'a, u32>,
     values: &'a mut [T],
