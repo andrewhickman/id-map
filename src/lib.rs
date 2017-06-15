@@ -10,22 +10,21 @@ mod tests;
 
 use std::iter::FromIterator;
 use std::ops::{Index, IndexMut};
-use std::{fmt, ptr};
+use std::{fmt, mem, ptr};
 
 use bit_set::BitSet;
 use bit_vec::BitVec;
 
-#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 /// An identifier for an `IdMap` value.
-pub struct Id(usize);
+pub type Id = usize;
 
-/// A container that gives each item a unique id.
+/// A container that gives each item a unique id. Internally all elements are stored contiguously.
 pub struct IdMap<T> {
     // The set of valid indices for values.
     ids: BitSet,
     // The buffer of values. Indices not in ids are invalid.
     values: Vec<T>,
-    // The smallest empty space in the vector of values, or values.len() if no space is left.
+    // The smallest empty space in the vector of values, or values.capacity() if no space is left.
     space: usize,
 }
 
@@ -56,34 +55,41 @@ impl<T> IdMap<T> {
 
     /// Inserts a value into the map and returns its id.
     pub fn insert(&mut self, val: T) -> Id {
-        if self.space == self.values.len() {
-            self.values.push(val)
-        } else {
-            unsafe { ptr::write(self.values.get_unchecked_mut(self.space), val) }
-        }
         let id = self.space;
-        self.ids.insert(id);
-
-        // Find the next empty space.
-        self.space += 1;
-        while self.ids.contains(self.space) {
-            self.space += 1;
+        if id == self.values.capacity() {
+            self.values.reserve(id + 1);
         }
+        unsafe { ptr::write(self.values.get_unchecked_mut(id), val) }
+        self.ids.insert(id);
+        self.find_space();
+        id
+    }
 
-        Id(id)
+    /// Inserts a value at a specific id, returning the old value if it existed.
+    pub fn insert_at(&mut self, id: Id, val: T) -> Option<T> {
+        if self.ids.insert(id) {
+            // val was not previously in the map.
+            if id == self.space {
+                self.find_space();
+            }
+            if self.values.capacity() < id + 1 {
+                self.values.reserve(id + 1);
+            }
+            unsafe { ptr::write(self.values.get_unchecked_mut(id), val) }
+            None
+        } else {
+            // val was previously in the map
+            Some(mem::replace(unsafe { self.values.get_unchecked_mut(id) }, val))
+        }
     }
 
     /// Removes an id from the map, returning its value if it was previously in the map.
-    pub fn remove(&mut self, Id(id): Id) -> Option<T> {
+    pub fn remove(&mut self, id: Id) -> Option<T> {
         if self.ids.remove(id) {
             if id < self.space {
                 self.space = id;
             }
-            if id + 1 == self.values.len() {
-                self.values.pop()
-            } else {
-                Some(unsafe { ptr::read(self.values.get_unchecked(id)) })
-            }
+            Some(unsafe { ptr::read(self.values.get_unchecked(id)) })
         } else {
             None
         }
@@ -134,7 +140,7 @@ impl<T> IdMap<T> {
     }
 
     /// Returns true if the map contains a value for the specified id.
-    pub fn contains(&self, Id(id): Id) -> bool {
+    pub fn contains(&self, id: Id) -> bool {
         self.ids.contains(id)
     }
 
@@ -145,11 +151,10 @@ impl<T> IdMap<T> {
             assert!(self.ids.contains(id));
         }
         assert!(!self.ids.contains(self.space));
-        // values.len() should be the least upper bound on ids.
+        // values.capacity() should an upper bound on ids.
         for id in &self.ids {
-            assert!(id < self.values.len())
+            assert!(id < self.values.capacity())
         }
-        assert!(self.values.len() == 0 || self.ids.contains(self.values.len() - 1));
     }
 
     /// Clear the values vec. Unsafe since ids is not updated.
@@ -157,7 +162,15 @@ impl<T> IdMap<T> {
         for id in &self.ids {
             ptr::drop_in_place(self.values.get_unchecked_mut(id))
         }
-        self.values.set_len(0);
+    }
+
+    /// Find the next empty space after it is filled.
+    fn find_space(&mut self) {
+        // we just filled the space so no need to check.
+        self.space += 1;
+        while self.ids.contains(self.space) {
+            self.space += 1;
+        }
     }
 }
 
@@ -170,10 +183,9 @@ impl<T> Drop for IdMap<T> {
 impl<T: Clone> Clone for IdMap<T> {
     fn clone(&self) -> Self {
         let ids = self.ids.clone();
-        let len = self.values.len();
-        let mut values = Vec::with_capacity(len);
+        let cap = self.values.capacity();
+        let mut values = Vec::with_capacity(cap);
         unsafe {
-            values.set_len(len);
             for id in &ids {
                 ptr::write(values.get_unchecked_mut(id),
                            self.values.get_unchecked(id).clone());
@@ -182,17 +194,16 @@ impl<T: Clone> Clone for IdMap<T> {
         IdMap {
             ids,
             values,
-            space: len,
+            space: cap,
         }
     }
 
     fn clone_from(&mut self, other: &Self) {
         self.clear();
-        let len = other.values.len();
+        let cap = other.values.capacity();
         self.ids.clone_from(&other.ids);
-        self.values.reserve(len);
+        self.values.reserve(cap);
         unsafe {
-            self.values.set_len(len);
             for id in &self.ids {
                 ptr::write(self.values.get_unchecked_mut(id),
                            other.values.get_unchecked(id).clone());
@@ -205,9 +216,9 @@ impl<T: fmt::Debug> fmt::Debug for IdMap<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{{")?;
         let mut iter = self.iter();
-        if let Some((Id(id), val)) = iter.next() {
+        if let Some((id, val)) = iter.next() {
             write!(f, "{:?}: {:?}", id, val)?;
-            for (Id(id), val) in iter {
+            for (id, val) in iter {
                 write!(f, ", {:?}: {:?}", id, val)?;
             }
         }
@@ -228,7 +239,7 @@ impl<T: PartialEq> PartialEq for IdMap<T> {
         self.ids == other.ids &&
         self.ids
             .iter()
-            .zip(other.ids.iter())
+            .zip(&other.ids)
             .all(|(l, r)| unsafe { self.values.get_unchecked(l) == other.values.get_unchecked(r) })
     }
 }
@@ -244,13 +255,24 @@ impl<T> Extend<T> for IdMap<T> {
 impl<T> FromIterator<T> for IdMap<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let values = Vec::from_iter(iter);
-        let space = values.len();
-        let ids = BitSet::from_bit_vec(BitVec::from_elem(values.len(), true));
+        let space = values.capacity();
+        let ids = BitSet::from_bit_vec(BitVec::from_elem(values.capacity(), true));
         IdMap {
             values,
             space,
             ids,
         }
+    }
+}
+
+impl<T> FromIterator<(Id, T)> for IdMap<T> {
+    fn from_iter<I: IntoIterator<Item = (Id, T)>>(iter: I) -> Self {
+        let iter = iter.into_iter();
+        let mut map = IdMap::with_capacity(iter.size_hint().0);
+        for (id, val) in iter {
+            map.insert_at(id, val);
+        }
+        map
     }
 }
 
@@ -275,14 +297,14 @@ impl<'a, T> IntoIterator for &'a mut IdMap<T> {
 impl<T> Index<Id> for IdMap<T> {
     type Output = T;
 
-    fn index(&self, Id(id): Id) -> &Self::Output {
+    fn index(&self, id: Id) -> &Self::Output {
         assert!(self.ids.contains(id), "id {} out of bounds", id);
         unsafe { self.values.get_unchecked(id) }
     }
 }
 
 impl<T> IndexMut<Id> for IdMap<T> {
-    fn index_mut(&mut self, Id(id): Id) -> &mut Self::Output {
+    fn index_mut(&mut self, id: Id) -> &mut Self::Output {
         assert!(self.ids.contains(id), "id {} out of bounds", id);
         unsafe { self.values.get_unchecked_mut(id) }
     }
@@ -299,7 +321,7 @@ impl<'a> Iterator for Ids<'a> {
     type Item = Id;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.ids.next().map(Id)
+        self.ids.next()
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -368,7 +390,7 @@ impl<'a, T: 'a> Iterator for Iter<'a, T> {
     type Item = (Id, &'a T);
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.ids.next().map(|id| (Id(id), unsafe { self.values.get_unchecked(id) }))
+        self.ids.next().map(|id| (id, unsafe { self.values.get_unchecked(id) }))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -398,7 +420,7 @@ impl<'a, T: 'a> Iterator for IterMut<'a, T> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.ids.next().map(|id| {
-                                (Id(id),
+                                (id,
                                  unsafe { &mut *(self.values.get_unchecked_mut(id) as *mut T) })
                             })
     }
