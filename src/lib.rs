@@ -1,6 +1,6 @@
 //! A container that gives each item a unique id. Adding and removing by index is O(1).
 
-#![deny(missing_docs)]
+#![deny(missing_docs, missing_debug_implementations)]
 
 extern crate id_set;
 
@@ -97,6 +97,27 @@ impl<T> IdMap<T> {
         }
     }
 
+    /// Remove all values not satisfying the predicate.
+    pub fn retain<F: FnMut(&T) -> bool>(&mut self, mut pred: F) {
+        let ids = &mut self.ids;
+        let values = &mut self.values;
+        ids.retain(|id| {
+            unsafe {
+                if pred(values.get_unchecked(id)) {
+                    true
+                } else {
+                    ptr::drop_in_place(values.get_unchecked_mut(id));
+                    false
+                }
+            }
+        })
+    }
+
+    /// Returns true if the map contains a value for the specified id.
+    pub fn contains(&self, id: Id) -> bool {
+        self.ids.contains(id)
+    }
+
     /// An iterator over ids, in increasing order.
     pub fn ids(&self) -> Ids {
         Ids {
@@ -108,7 +129,7 @@ impl<T> IdMap<T> {
     pub fn values(&self) -> Values<T> {
         Values {
             ids: self.ids.iter(),
-            values: &self.values,
+            values: self.values.as_ptr(),
         }
     }
 
@@ -116,7 +137,7 @@ impl<T> IdMap<T> {
     pub fn values_mut(&mut self) -> ValuesMut<T> {
         ValuesMut {
             ids: self.ids.iter(),
-            values: &mut self.values,
+            values: self.values.as_mut_ptr(),
         }
     }
 
@@ -124,7 +145,7 @@ impl<T> IdMap<T> {
     pub fn iter(&self) -> Iter<T> {
         Iter {
             ids: self.ids.iter(),
-            values: &self.values,
+            values: self.values.as_ptr(),
         }
     }
 
@@ -132,13 +153,21 @@ impl<T> IdMap<T> {
     pub fn iter_mut(&mut self) -> IterMut<T> {
         IterMut {
             ids: self.ids.iter(),
-            values: &mut self.values,
+            values: self.values.as_mut_ptr(),
         }
     }
 
-    /// Returns true if the map contains a value for the specified id.
-    pub fn contains(&self, id: Id) -> bool {
-        self.ids.contains(id)
+    /// A consuming iterator over id-value pairs, in order of increasing id.
+    pub fn into_iter(self) -> IntoIter<T> {
+        // we cannot move out of self because of the drop impl.
+        let (ids, values) = unsafe {
+            (ptr::read(&self.ids), ptr::read(&self.values))
+        };
+        mem::forget(self);
+        IntoIter {
+            ids: ids.into_iter(),
+            values: values,
+        }
     }
 
     #[cfg(test)]
@@ -161,9 +190,8 @@ impl<T> IdMap<T> {
         }
     }
 
-    /// Find the next empty space after it is filled.
+    /// Find the next empty space after has been filled.
     fn find_space(&mut self) {
-        // we just filled the space so no need to check.
         self.space += 1;
         while self.ids.contains(self.space) {
             self.space += 1;
@@ -291,6 +319,15 @@ impl<'a, T> IntoIterator for &'a mut IdMap<T> {
     }
 }
 
+impl<T> IntoIterator for IdMap<T> {
+    type Item = (Id, T);
+    type IntoIter = IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.into_iter()
+    }
+}
+
 impl<T> Index<Id> for IdMap<T> {
     type Output = T;
 
@@ -307,7 +344,7 @@ impl<T> IndexMut<Id> for IdMap<T> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 /// An iterator over all ids, in increasing order.
 pub struct Ids<'a> {
     ids: id_set::Iter<'a>,
@@ -331,17 +368,18 @@ impl<'a> ExactSizeIterator for Ids<'a> {
     }
 }
 
+#[derive(Debug)]
 /// An iterator over all values, in order of increasing id.
 pub struct Values<'a, T: 'a> {
     ids: id_set::Iter<'a>,
-    values: &'a [T],
+    values: *const T,
 }
 
 impl<'a, T: 'a> Iterator for Values<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.ids.next().map(|id| unsafe { self.values.get_unchecked(id) })
+        self.ids.next().map(|id| unsafe { &*self.values.offset(id as isize) })
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -364,19 +402,18 @@ impl<'a, T: 'a> Clone for Values<'a, T> {
     }
 }
 
+#[derive(Debug)]
 /// A mutable iterator over all values, in order of increasing id.
 pub struct ValuesMut<'a, T: 'a> {
     ids: id_set::Iter<'a>,
-    values: &'a mut [T],
+    values: *mut T,
 }
 
 impl<'a, T: 'a> Iterator for ValuesMut<'a, T> {
     type Item = &'a mut T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // Cast through a pointer to get rid of lifetime information. This is effectively asserting
-        // that each reference returned is distinct.
-        self.ids.next().map(|id| unsafe { &mut *(self.values.get_unchecked_mut(id) as *mut T) })
+        self.ids.next().map(|id| unsafe { &mut *self.values.offset(id as isize) })
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -390,17 +427,18 @@ impl<'a, T: 'a> ExactSizeIterator for ValuesMut<'a, T> {
     }
 }
 
+#[derive(Debug)]
 /// An iterator over id-value pairs, in order of increasing id.
 pub struct Iter<'a, T: 'a> {
     ids: id_set::Iter<'a>,
-    values: &'a [T],
+    values: *const T,
 }
 
 impl<'a, T: 'a> Iterator for Iter<'a, T> {
     type Item = (Id, &'a T);
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.ids.next().map(|id| (id, unsafe { self.values.get_unchecked(id) }))
+        self.ids.next().map(|id| (id, unsafe { &*self.values.offset(id as isize) }))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -423,19 +461,18 @@ impl<'a, T: 'a> Clone for Iter<'a, T> {
     }
 }
 
+#[derive(Debug)]
 /// A mutable iterator over id-value pairs, in order of increasing id.
 pub struct IterMut<'a, T: 'a> {
     ids: id_set::Iter<'a>,
-    values: &'a mut [T],
+    values: *mut T,
 }
 
 impl<'a, T: 'a> Iterator for IterMut<'a, T> {
     type Item = (Id, &'a mut T);
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.ids.next().map(|id| {
-                                (id, unsafe { &mut *(self.values.get_unchecked_mut(id) as *mut T) })
-                            })
+        self.ids.next().map(|id| (id, unsafe { &mut *self.values.offset(id as isize) }))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -446,5 +483,24 @@ impl<'a, T: 'a> Iterator for IterMut<'a, T> {
 impl<'a, T: 'a> ExactSizeIterator for IterMut<'a, T> {
     fn len(&self) -> usize {
         self.ids.len()
+    }
+}
+
+#[derive(Clone, Debug)]
+/// A consuming iterator over id-value pairs, in order of increasing id.
+pub struct IntoIter<T> {
+    ids: id_set::IntoIter,
+    values: Vec<T>,    
+}
+
+impl<T> Iterator for IntoIter<T> {
+    type Item = (Id, T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.ids.next().map(|id| (id, unsafe { ptr::read(self.values.get_unchecked(id)) }))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.ids.size_hint()
     }
 }

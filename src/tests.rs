@@ -43,10 +43,10 @@ fn iter() {
 
     let mut ids2: IdMap<_> = ids1.clone();
     assert_eq!(ids1, ids2);
-    ids2.clear();
     ids2.clone_from(&ids1);
     assert_eq!(ids1, ids2);
 
+    assert_eq!(ids1, ids2.into_iter().collect::<IdMap<_>>());
 }
 
 #[test]
@@ -125,6 +125,8 @@ fn ubsan() {
     let mut ids2 = IdMap::new();
     ids2.clone_from(&ids);
 
+    ids2.retain(|&Test(val)| val % 2 != 0);
+
     ids2.clear();
 
     std::mem::drop(ids);
@@ -155,4 +157,16 @@ fn insert_at() {
     ids.assert_invariant();
     assert_eq!(ids.remove(10), Some(10));
     ids.assert_invariant();
+}
+
+#[test]
+fn retain() {
+    let mut ids = IdMap::from_iter(0..100);
+
+    ids.retain(|n| n % 2 == 0);
+
+    let vals: Vec<_> = ids.values().cloned().collect();
+    let expected: Vec<_> = (0..50).map(|n| n * 2).collect();
+
+    assert_eq!(vals, expected);
 }
