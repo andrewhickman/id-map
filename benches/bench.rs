@@ -2,6 +2,7 @@
 
 extern crate test;
 extern crate id_map;
+extern crate bit_set;
 
 use std::collections::{HashMap, HashSet};
 
