@@ -26,6 +26,7 @@ pub struct IdMap<T> {
 }
 
 impl<T> IdMap<T> {
+    #[inline]
     /// Creates an empty `IdMap<T>`.
     pub fn new() -> Self {
         IdMap {
@@ -35,6 +36,7 @@ impl<T> IdMap<T> {
         }
     }
 
+    #[inline]
     /// Creates an `IdMap<T>` with the specified capacity.
     pub fn with_capacity(cap: usize) -> Self {
         IdMap {
@@ -44,17 +46,20 @@ impl<T> IdMap<T> {
         }
     }
 
+    #[inline]
     /// Removes all values from the map.
     pub fn clear(&mut self) {
         unsafe { self.drop_values() }
         self.ids.clear();
     }
 
+    #[inline]
     /// Returns the number of id-value pairs in the map.
     pub fn len(&self) -> usize {
         self.ids.len()
     }
 
+    #[inline]
     /// Inserts a value into the map and returns its id.
     pub fn insert(&mut self, val: T) -> Id {
         let id = self.space;
@@ -67,6 +72,7 @@ impl<T> IdMap<T> {
         id
     }
 
+    #[inline]
     /// Inserts a value at a specific id, returning the old value if it existed.
     pub fn insert_at(&mut self, id: Id, val: T) -> Option<T> {
         if self.ids.insert(id) {
@@ -85,6 +91,7 @@ impl<T> IdMap<T> {
         }
     }
 
+    #[inline]
     /// Removes an id from the map, returning its value if it was previously in the map.
     pub fn remove(&mut self, id: Id) -> Option<T> {
         if self.ids.remove(id) {
@@ -97,6 +104,7 @@ impl<T> IdMap<T> {
         }
     }
 
+    #[inline]
     /// Remove all values not satisfying the predicate.
     pub fn retain<F: FnMut(&T) -> bool>(&mut self, mut pred: F) {
         let ids = &mut self.ids;
@@ -113,11 +121,13 @@ impl<T> IdMap<T> {
         })
     }
 
+    #[inline]
     /// Returns true if the map contains a value for the specified id.
     pub fn contains(&self, id: Id) -> bool {
         self.ids.contains(id)
     }
 
+    #[inline]
     /// An iterator over ids, in increasing order.
     pub fn ids(&self) -> Ids {
         Ids {
@@ -125,6 +135,7 @@ impl<T> IdMap<T> {
         }
     }
 
+    #[inline]
     /// An iterator over values, in order of increasing id.
     pub fn values(&self) -> Values<T> {
         Values {
@@ -133,6 +144,7 @@ impl<T> IdMap<T> {
         }
     }
 
+    #[inline]
     /// A mutable iterator over values, in order of increasing id.
     pub fn values_mut(&mut self) -> ValuesMut<T> {
         ValuesMut {
@@ -141,6 +153,7 @@ impl<T> IdMap<T> {
         }
     }
 
+    #[inline]
     /// An iterator over id-value pairs, in order of increasing id.
     pub fn iter(&self) -> Iter<T> {
         Iter {
@@ -149,6 +162,7 @@ impl<T> IdMap<T> {
         }
     }
 
+    #[inline]
     /// A mutable iterator over id-value pairs, in order of increasing id.
     pub fn iter_mut(&mut self) -> IterMut<T> {
         IterMut {
@@ -157,6 +171,7 @@ impl<T> IdMap<T> {
         }
     }
 
+    #[inline]
     /// A consuming iterator over id-value pairs, in order of increasing id.
     pub fn into_iter(self) -> IntoIter<T> {
         // we cannot move out of self because of the drop impl.
@@ -200,12 +215,14 @@ impl<T> IdMap<T> {
 }
 
 impl<T> Drop for IdMap<T> {
+    #[inline]
     fn drop(&mut self) {
         unsafe { self.drop_values() }
     }
 }
 
 impl<T: Clone> Clone for IdMap<T> {
+    #[inline]
     fn clone(&self) -> Self {
         let ids = self.ids.clone();
         let cap = self.values.capacity();
@@ -223,6 +240,7 @@ impl<T: Clone> Clone for IdMap<T> {
         }
     }
 
+    #[inline]
     fn clone_from(&mut self, other: &Self) {
         unsafe { self.drop_values() };
         self.ids.clone_from(&other.ids);
@@ -253,6 +271,7 @@ impl<T: fmt::Debug> fmt::Debug for IdMap<T> {
 }
 
 impl<T> Default for IdMap<T> {
+    #[inline]
     fn default() -> Self {
         IdMap::new()
     }
@@ -270,6 +289,7 @@ impl<T: PartialEq> PartialEq for IdMap<T> {
 }
 
 impl<T> Extend<T> for IdMap<T> {
+    #[inline]
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         for val in iter {
             self.insert(val);
@@ -278,6 +298,7 @@ impl<T> Extend<T> for IdMap<T> {
 }
 
 impl<T> FromIterator<T> for IdMap<T> {
+    #[inline]
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let values = Vec::from_iter(iter);
         let space = values.capacity();
@@ -291,6 +312,7 @@ impl<T> FromIterator<T> for IdMap<T> {
 }
 
 impl<T> FromIterator<(Id, T)> for IdMap<T> {
+    #[inline]
     fn from_iter<I: IntoIterator<Item = (Id, T)>>(iter: I) -> Self {
         let iter = iter.into_iter();
         let mut map = IdMap::with_capacity(iter.size_hint().0);
@@ -305,6 +327,7 @@ impl<'a, T> IntoIterator for &'a IdMap<T> {
     type Item = (Id, &'a T);
     type IntoIter = Iter<'a, T>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
@@ -314,6 +337,7 @@ impl<'a, T> IntoIterator for &'a mut IdMap<T> {
     type Item = (Id, &'a mut T);
     type IntoIter = IterMut<'a, T>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.iter_mut()
     }
@@ -323,6 +347,7 @@ impl<T> IntoIterator for IdMap<T> {
     type Item = (Id, T);
     type IntoIter = IntoIter<T>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.into_iter()
     }
@@ -331,6 +356,7 @@ impl<T> IntoIterator for IdMap<T> {
 impl<T> Index<Id> for IdMap<T> {
     type Output = T;
 
+    #[inline]
     fn index(&self, id: Id) -> &Self::Output {
         assert!(self.ids.contains(id), "id {} out of bounds", id);
         unsafe { self.values.get_unchecked(id) }
@@ -338,6 +364,7 @@ impl<T> Index<Id> for IdMap<T> {
 }
 
 impl<T> IndexMut<Id> for IdMap<T> {
+    #[inline]
     fn index_mut(&mut self, id: Id) -> &mut Self::Output {
         assert!(self.ids.contains(id), "id {} out of bounds", id);
         unsafe { self.values.get_unchecked_mut(id) }
@@ -353,16 +380,19 @@ pub struct Ids<'a> {
 impl<'a> Iterator for Ids<'a> {
     type Item = Id;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.ids.next()
     }
 
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.ids.size_hint()
     }
 }
 
 impl<'a> ExactSizeIterator for Ids<'a> {
+    #[inline]
     fn len(&self) -> usize {
         self.ids.len()
     }
@@ -378,22 +408,26 @@ pub struct Values<'a, T: 'a> {
 impl<'a, T: 'a> Iterator for Values<'a, T> {
     type Item = &'a T;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.ids.next().map(|id| unsafe { &*self.values.offset(id as isize) })
     }
 
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.ids.size_hint()
     }
 }
 
 impl<'a, T: 'a> ExactSizeIterator for Values<'a, T> {
+    #[inline]
     fn len(&self) -> usize {
         self.ids.len()
     }
 }
 
 impl<'a, T: 'a> Clone for Values<'a, T> {
+    #[inline]
     fn clone(&self) -> Self {
         Values {
             ids: self.ids.clone(),
@@ -412,16 +446,19 @@ pub struct ValuesMut<'a, T: 'a> {
 impl<'a, T: 'a> Iterator for ValuesMut<'a, T> {
     type Item = &'a mut T;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.ids.next().map(|id| unsafe { &mut *self.values.offset(id as isize) })
     }
 
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.ids.size_hint()
     }
 }
 
 impl<'a, T: 'a> ExactSizeIterator for ValuesMut<'a, T> {
+    #[inline]
     fn len(&self) -> usize {
         self.ids.len()
     }
@@ -437,22 +474,26 @@ pub struct Iter<'a, T: 'a> {
 impl<'a, T: 'a> Iterator for Iter<'a, T> {
     type Item = (Id, &'a T);
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.ids.next().map(|id| (id, unsafe { &*self.values.offset(id as isize) }))
     }
 
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.ids.size_hint()
     }
 }
 
 impl<'a, T: 'a> ExactSizeIterator for Iter<'a, T> {
+    #[inline]
     fn len(&self) -> usize {
         self.ids.len()
     }
 }
 
 impl<'a, T: 'a> Clone for Iter<'a, T> {
+    #[inline]
     fn clone(&self) -> Self {
         Iter {
             ids: self.ids.clone(),
@@ -471,16 +512,19 @@ pub struct IterMut<'a, T: 'a> {
 impl<'a, T: 'a> Iterator for IterMut<'a, T> {
     type Item = (Id, &'a mut T);
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.ids.next().map(|id| (id, unsafe { &mut *self.values.offset(id as isize) }))
     }
 
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.ids.size_hint()
     }
 }
 
 impl<'a, T: 'a> ExactSizeIterator for IterMut<'a, T> {
+    #[inline]
     fn len(&self) -> usize {
         self.ids.len()
     }
@@ -496,10 +540,12 @@ pub struct IntoIter<T> {
 impl<T> Iterator for IntoIter<T> {
     type Item = (Id, T);
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.ids.next().map(|id| (id, unsafe { ptr::read(self.values.get_unchecked(id)) }))
     }
 
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.ids.size_hint()
     }
