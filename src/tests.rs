@@ -125,7 +125,7 @@ fn ubsan() {
     let mut ids2 = IdMap::new();
     ids2.clone_from(&ids);
 
-    ids2.retain(|&Test(val)| val % 2 != 0);
+    ids2.retain(|_, &Test(val)| val % 2 != 0);
 
     ids2.clear();
 
@@ -163,7 +163,7 @@ fn insert_at() {
 fn retain() {
     let mut ids = IdMap::from_iter(0..100);
 
-    ids.retain(|n| n % 2 == 0);
+    ids.retain(|_, n| n % 2 == 0);
 
     let vals: Vec<_> = ids.values().cloned().collect();
     let expected: Vec<_> = (0..50).map(|n| n * 2).collect();
