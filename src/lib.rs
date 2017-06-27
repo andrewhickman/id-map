@@ -22,7 +22,7 @@ pub struct IdMap<T> {
     // The buffer of values. Indices not in ids are invalid.
     values: Vec<T>,
     // The smallest empty space in the vector of values, or values.capacity() if no space is left.
-    space: usize,
+    space: Id,
 }
 
 impl<T> IdMap<T> {
@@ -54,9 +54,21 @@ impl<T> IdMap<T> {
     }
 
     #[inline]
+    /// Returns the id that a subsequent call to insert() will produce.
+    pub fn next_id(&self) -> Id {
+        self.space
+    }
+
+    #[inline]
     /// Returns the number of id-value pairs in the map.
     pub fn len(&self) -> usize {
         self.ids.len()
+    }
+
+    #[inline]
+    /// Returns a reference to the set of valid ids.
+    pub fn id_set(&self) -> &IdSet {
+        &self.ids
     }
 
     #[inline]
@@ -106,12 +118,12 @@ impl<T> IdMap<T> {
 
     #[inline]
     /// Remove all values not satisfying the predicate.
-    pub fn retain<F: FnMut(&T) -> bool>(&mut self, mut pred: F) {
+    pub fn retain<F: FnMut(Id, &T) -> bool>(&mut self, mut pred: F) {
         let ids = &mut self.ids;
         let values = &mut self.values;
         ids.retain(|id| {
             unsafe {
-                if pred(values.get_unchecked(id)) {
+                if pred(id, values.get_unchecked(id)) {
                     true
                 } else {
                     ptr::drop_in_place(values.get_unchecked_mut(id));
