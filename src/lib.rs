@@ -1,4 +1,21 @@
-//! A container that gives each item a unique id. Adding and removing by index is O(1).
+//! [`IdMap`] is a container that gives each item a unique id. Adding and removing by index is O(1).
+//! 
+//! # Examples
+//! 
+//! ```
+//! # use id_map::IdMap;
+//! #
+//! let mut map = IdMap::new();
+//! let blue_id = map.insert("blue");
+//! let red_id = map.insert("red");
+//!
+//! map.retain(|_, &color| color != "red");
+//!
+//! assert!(!map.contains(red_id));
+//! assert_eq!(map[blue_id], "blue");
+//! ```
+//! 
+//! [`IdMap`]: struct.IdMap.html
 
 #![deny(missing_docs, missing_debug_implementations)]
 
@@ -219,6 +236,7 @@ impl<T> IdMap<T> {
 
     /// Find the next empty space after has been filled.
     fn find_space(&mut self) {
+        // Each id corresponds to an entry in the storage so ids can never fill up.
         self.space += 1;
         while self.ids.contains(self.space) {
             self.space += 1;
