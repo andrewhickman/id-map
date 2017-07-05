@@ -4,8 +4,8 @@ description = "Data structure of values indexed by IDs."
 documentation = "https://docs.rs/id-map/"
 repository = "https://github.com/andrewhickman/id-map"
 license = "MIT"
-version = "0.1.11"
-keywords = ["data-structures"]
+version = "0.1.12"
+keywords = ["data-structures", "map"]
 authors = ["Andrew Hickman <andrew.hickman1@sky.com>"]
 
 [dependencies]
