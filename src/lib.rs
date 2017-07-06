@@ -330,7 +330,8 @@ impl<T> Extend<T> for IdMap<T> {
 impl<T> FromIterator<T> for IdMap<T> {
     #[inline]
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        let values = Vec::from_iter(iter);
+        let mut values = Vec::from_iter(iter);
+        unsafe { values.set_len(0) }
         let space = values.capacity();
         let ids = IdSet::new_filled(values.capacity());
         IdMap {

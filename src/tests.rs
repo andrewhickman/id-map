@@ -122,7 +122,7 @@ fn ubsan() {
 
     std::mem::drop(ids.clone());
 
-    let mut ids2 = IdMap::new();
+    let mut ids2 = IdMap::from_iter(Some(Test::new(0)));
     ids2.clone_from(&ids);
 
     ids2.retain(|_, &Test(val)| val % 2 != 0);
