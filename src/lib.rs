@@ -157,6 +157,26 @@ impl<T> IdMap<T> {
     }
 
     #[inline]
+    /// Returns a reference to the value at the specified id if it is in the map.
+    pub fn get(&self, id: Id) -> Option<&T> {
+        if self.ids.contains(id) {
+            Some(unsafe { self.values.get_unchecked(id) })
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    /// Returns a mutable reference to the value at the specified id if it is in the map.
+    pub fn get_mut(&mut self, id: Id) -> Option<&mut T> {
+        if self.ids.contains(id) {
+            Some(unsafe { self.values.get_unchecked_mut(id) })
+        } else {
+            None
+        }
+    }
+
+    #[inline]
     /// An iterator over ids, in increasing order.
     pub fn ids(&self) -> Ids {
         Ids {
