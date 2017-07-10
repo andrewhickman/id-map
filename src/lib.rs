@@ -84,7 +84,7 @@ impl<T> IdMap<T> {
 
     #[inline]
     /// Returns a reference to the set of valid ids.
-    pub fn id_set(&self) -> &IdSet {
+    pub fn as_set(&self) -> &IdSet {
         &self.ids
     }
 
