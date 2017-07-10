@@ -128,6 +128,10 @@ fn ubsan() {
     ids2.retain(|_, &Test(val)| val % 2 != 0);
 
     ids2.clear();
+    ids2.clone_from(&ids);
+
+    let set = (0..ids2.capacity()).collect();
+    ids2.remove_set(&set);
 
     std::mem::drop(ids);
 

@@ -83,6 +83,19 @@ impl<T> IdMap<T> {
     }
 
     #[inline]
+    /// Returns the number of id-value pairs the map can hold before reallocating.
+    pub fn capacity(&self) -> usize {
+        self.ids.capacity()
+    }
+
+    #[inline]
+    /// Resizes the map such that that `capacity() >= cap`.
+    pub fn reserve(&mut self, cap: usize) {
+        self.ids.reserve(cap);
+        self.values.reserve(cap);
+    }
+
+    #[inline]
     /// Returns a reference to the set of valid ids.
     pub fn as_set(&self) -> &IdSet {
         &self.ids
