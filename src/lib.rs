@@ -134,6 +134,17 @@ impl<T> IdMap<T> {
     }
 
     #[inline]
+    /// Removes all ids in the seset from the map.
+    pub fn remove_set(&mut self, set: &IdSet) {
+        for id in self.ids.intersection(set) {
+            unsafe {
+                ptr::drop_in_place(self.values.get_unchecked_mut(id))
+            }
+        }
+        self.ids.inplace_difference(set);
+    }
+
+    #[inline]
     /// Remove all values not satisfying the predicate.
     pub fn retain<F: FnMut(Id, &T) -> bool>(&mut self, mut pred: F) {
         let ids = &mut self.ids;

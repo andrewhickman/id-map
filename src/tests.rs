@@ -170,3 +170,15 @@ fn retain() {
 
     assert_eq!(vals, expected);
 }
+
+#[test]
+fn remove_set() {
+    let mut ids = IdMap::from_iter(0..100);
+
+    ids.remove_set(&IdSet::from_iter(0..50));
+
+    let vals: Vec<_> = ids.values().cloned().collect();
+    let expected: Vec<_> = (50..100).collect();
+
+    assert_eq!(vals, expected);
+}
