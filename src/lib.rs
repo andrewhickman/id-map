@@ -28,7 +28,7 @@ pub use id_set::Id;
 
 use std::iter::FromIterator;
 use std::ops::{Index, IndexMut};
-use std::{fmt, mem, ptr};
+use std::{cmp, fmt, mem, ptr};
 
 use id_set::IdSet;
 
@@ -93,6 +93,18 @@ impl<T> IdMap<T> {
     pub fn reserve(&mut self, cap: usize) {
         self.ids.reserve(cap);
         self.values.reserve(cap);
+    }
+
+    #[inline]
+    /// Resizes the map to minimize allocated memory.
+    pub fn shrink_to_fit(&mut self) {
+        self.ids.shrink_to_fit();
+        unsafe {
+            let cap = cmp::min(self.values.capacity(), self.ids.capacity());
+            self.values.set_len(cap);
+            self.values.shrink_to_fit();
+            self.values.set_len(0);
+        }
     }
 
     #[inline]

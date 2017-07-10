@@ -121,6 +121,8 @@ fn ubsan() {
     ids.assert_invariant();
 
     std::mem::drop(ids.clone());
+    
+    ids.shrink_to_fit();
 
     let mut ids2 = IdMap::from_iter(Some(Test::new(0)));
     ids2.clone_from(&ids);
@@ -129,6 +131,8 @@ fn ubsan() {
 
     ids2.clear();
     ids2.clone_from(&ids);
+
+    ids2.shrink_to_fit();
 
     let set = (0..ids2.capacity()).collect();
     ids2.remove_set(&set);

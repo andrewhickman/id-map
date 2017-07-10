@@ -9,4 +9,4 @@ keywords = ["data-structures", "map"]
 authors = ["Andrew Hickman <andrew.hickman1@sky.com>"]
 
 [dependencies]
-id-set = "0.2.0"
+id-set = "0.2.1"
