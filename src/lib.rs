@@ -114,7 +114,7 @@ impl<T> IdMap<T> {
     }
 
     #[inline]
-    /// Inserts a value into the map and returns its id.
+    /// Inserts a value into an empty slot in the map and returns its id.
     pub fn insert(&mut self, val: T) -> Id {
         let id = self.space;
         if id == self.values.capacity() {
@@ -155,6 +155,33 @@ impl<T> IdMap<T> {
             Some(unsafe { ptr::read(self.values.get_unchecked(id)) })
         } else {
             None
+        }
+    }
+
+    #[inline]
+    /// If the id has a value, returns it, otherwise inserts a new value.
+    pub fn get_or_insert(&mut self, id: Id, val: T) -> &mut T {
+        self.get_or_insert_with(id, || val)
+    }
+    
+    #[inline]
+    /// If the id has a value, returns it, otherwise inserts a new value with the provided closure.
+    pub fn get_or_insert_with<F: FnOnce() -> T>(&mut self, id: Id, f: F) -> &mut T {
+        if self.ids.insert(id) {
+            // val was not previously in the map.
+            if id == self.space {
+                self.find_space();
+            }
+            if self.values.capacity() < id + 1 {
+                self.values.reserve(id + 1);
+            }
+            unsafe {
+                let space = self.values.get_unchecked_mut(id);
+                ptr::write(space, f());
+                space
+            }
+        } else {
+            unsafe { self.values.get_unchecked_mut(id) }
         }
     }
 

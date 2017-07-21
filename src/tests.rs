@@ -155,13 +155,31 @@ fn insert_at() {
 
     assert_eq!(ids.insert_at(3, 6), Some(3));
     ids.assert_invariant();
-    assert_eq!(ids[3], 6);
-    ids.assert_invariant();
     assert_eq!(ids.remove(3), Some(6));
     ids.assert_invariant();
     assert_eq!(ids.insert_at(3, 7), None);
     ids.assert_invariant();
+    assert_eq!(ids[3], 7);
+    ids.assert_invariant();
     assert_eq!(ids.insert_at(10, 10), None);
+    ids.assert_invariant();
+    assert_eq!(ids.remove(10), Some(10));
+    ids.assert_invariant();
+}
+
+#[test]
+fn get_or_insert() {
+    let mut ids = IdMap::from_iter(0..5);
+
+    assert_eq!(ids.get_or_insert(3, 42), &3);
+    ids.assert_invariant();
+    assert_eq!(ids.remove(3), Some(3));
+    ids.assert_invariant();
+    assert_eq!(ids.get_or_insert(3, 42), &42);
+    ids.assert_invariant();
+    assert_eq!(ids[3], 42);
+    ids.assert_invariant();
+    assert_eq!(ids.get_or_insert(10, 10), &10);
     ids.assert_invariant();
     assert_eq!(ids.remove(10), Some(10));
     ids.assert_invariant();
