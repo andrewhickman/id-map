@@ -149,9 +149,7 @@ impl<T> IdMap<T> {
     /// Removes an id from the map, returning its value if it was previously in the map.
     pub fn remove(&mut self, id: Id) -> Option<T> {
         if self.ids.remove(id) {
-            if id < self.space {
-                self.space = id;
-            }
+            self.space = cmp::min(self.space, id);
             Some(unsafe { ptr::read(self.values.get_unchecked(id)) })
         } else {
             None
@@ -186,13 +184,25 @@ impl<T> IdMap<T> {
     }
 
     #[inline]
-    /// Removes all ids in the seset from the map.
+    /// Removes all ids in the set from the map.
     pub fn remove_set(&mut self, set: &IdSet) {
-        for id in self.ids.intersection(set) {
-            unsafe {
-                ptr::drop_in_place(self.values.get_unchecked_mut(id))
+        {
+            let mut iter = self.ids.intersection(set).into_iter();
+
+            if let Some(first) = iter.next() {
+                // Set iterators are increasing so we only need to change start once.
+                self.space = cmp::min(self.space, first);
+                unsafe {
+                    ptr::drop_in_place(self.values.get_unchecked_mut(first))
+                }
+                for id in iter {
+                    unsafe {
+                        ptr::drop_in_place(self.values.get_unchecked_mut(id))
+                    }
+                }
             }
         }
+
         self.ids.inplace_difference(set);
     }
 
@@ -201,11 +211,13 @@ impl<T> IdMap<T> {
     pub fn retain<F: FnMut(Id, &T) -> bool>(&mut self, mut pred: F) {
         let ids = &mut self.ids;
         let values = &mut self.values;
+        let space = &mut self.space;
         ids.retain(|id| {
             unsafe {
                 if pred(id, values.get_unchecked(id)) {
                     true
                 } else {
+                    *space = cmp::min(*space, id);
                     ptr::drop_in_place(values.get_unchecked_mut(id));
                     false
                 }

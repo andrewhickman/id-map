@@ -208,3 +208,32 @@ fn remove_set() {
 
     assert_eq!(vals, expected);
 }
+
+#[test]
+fn next_id() {
+    let mut map1 = IdMap::new();
+    for _ in 0..10 {
+        map1.insert("foo");
+    }
+    // remove all odd ids
+    for i in 0..5 {
+        map1.remove(i * 2 + 1);
+    }
+    assert_eq!(map1.next_id(), 1);
+
+    let mut map2 = IdMap::new();
+    for _ in 0..10 {
+        map2.insert("foo");
+    }
+    // remove all odd ids
+    map2.retain(|id, _| id % 2 == 0);
+    assert_eq!(map2.next_id(), 1);
+
+    let mut map3 = IdMap::new();
+    let set: IdSet = (0..10).filter(|i| i % 2 != 0).collect();
+    for _ in 0..10 {
+        map3.insert("foo");
+    }
+    map3.remove_set(&set);
+    assert_eq!(map3.next_id(), 1);
+}
