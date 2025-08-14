@@ -71,9 +71,9 @@ fn panic() {
 
 #[test]
 fn ubsan() {
-    use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT, Ordering};
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
-    static COUNT: AtomicUsize = ATOMIC_USIZE_INIT;
+    static COUNT: AtomicUsize = AtomicUsize::new(0);
 
     struct Test(u32);
 
@@ -121,7 +121,7 @@ fn ubsan() {
     ids.assert_invariant();
 
     std::mem::drop(ids.clone());
-    
+
     ids.shrink_to_fit();
 
     let mut ids2 = IdMap::from_iter(Some(Test::new(0)));
